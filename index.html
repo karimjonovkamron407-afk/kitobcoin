@@ -1002,6 +1002,20 @@ html[data-theme="light"] .primary{box-shadow:0 8px 28px #7c5cff55}
 <label id="wantBookLabel">Qaysi kitobga almashtirmoqchisiz? <small>(ixtiyoriy)</small><input id="bookWant" type="text" maxlength="80" placeholder="Masalan: Mehrobdan chayon"></label>
 <label>Telegram username <small>(ixtiyoriy)</small><input id="telegramUser" type="text" placeholder="@username (shart emas)" maxlength="32" pattern="@?[A-Za-z0-9_]{5,32}"><small>Masalan: @kitobxon_01. Telegram ishlatmasangiz bo‘sh qoldiring — aloqa sayt chatida bo‘ladi. Telefon raqamingizni yozmang.</small></label>
 <label>Qo‘shimcha ma’lumot<textarea id="bookDescription" rows="3" placeholder="Kitob haqida qisqacha..."></textarea></label>
+<div class="card" style="padding:14px 16px;margin-bottom:4px;border:1px solid #7c5cff44;background:linear-gradient(135deg,#7c5cff14,#22d3ee0d)">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+    <strong style="font-size:14px">🪙 KitobCoin — Premium e’lon</strong>
+    <span style="font-size:13px;color:var(--muted)">Balans: <b id="addCoinBal">0</b> 🪙</span>
+  </div>
+  <label style="grid-auto-flow:column;justify-content:start;align-items:center;gap:10px;cursor:pointer;margin:0">
+    <input id="bookPremiumToggle" type="checkbox" style="width:auto;margin:0">
+    <span>⭐ Joylash bilan Premium qilish (5 Coin / 7 kun — katalog yuqorisida)</span>
+  </label>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px">
+    <small id="addPremiumHint" style="color:var(--muted)">Ixtiyoriy. Tasdiqlangach 7 kun tepada turadi.</small>
+    <button type="button" class="btn secondary" data-go="donate" style="padding:6px 12px;font-size:12px">🪙 Coin olish</button>
+  </div>
+</div>
 <button class="btn primary full" type="submit">＋ Kitobni joylash</button>
 <p id="formMessage" class="message" role="status"></p>
 </form>
@@ -1195,6 +1209,8 @@ html[data-theme="light"] .primary{box-shadow:0 8px 28px #7c5cff55}
     <button type="button" class="ach-tab on" data-admtab="books">📚 Kitoblar</button>
     <button type="button" class="ach-tab" data-admtab="exchanges">🔄 Almashuvlar</button>
     <button type="button" class="ach-tab" data-admtab="reports">⚠️ Shikoyatlar</button>
+    <button type="button" class="ach-tab" data-admtab="coins" hidden>🪙 Coinlar</button>
+    <button type="button" class="ach-tab" data-admtab="users">👥 Foydalanuvchilar</button>
     <button type="button" class="ach-tab" data-admtab="extra">⚙️ Boshqa</button>
   </div>
   <div id="admPaneBooks">
@@ -1208,17 +1224,27 @@ html[data-theme="light"] .primary{box-shadow:0 8px 28px #7c5cff55}
     <div id="pendingReports" class="history" style="margin-bottom:12px"></div>
     <div id="activeRestrictions" class="history"></div>
   </div>
-  <div id="admPaneExtra" hidden>
-    <form id="adminForm" class="toolbar" style="margin:0 0 12px" hidden>
-      <input id="adminNick" type="text" placeholder="Ro‘yxatdan o‘tgan nickname" maxlength="20">
-      <button class="btn primary" type="submit">Admin qo‘shish</button>
-    </form>
+  <div id="admPaneCoins" hidden>
     <form id="grantCoinForm" class="toolbar" style="margin:0 0 12px" hidden>
       <input id="grantNick" type="text" placeholder="Nickname" maxlength="20">
       <input id="grantCoins" type="number" min="1" max="100000" placeholder="Coin" style="max-width:100px">
       <button class="btn primary" type="submit">🪙 Coin berish</button>
     </form>
-    <div id="pendingDonates" class="history" style="margin-bottom:12px"></div>
+    <div id="pendingDonates" class="history"></div>
+  </div>
+  <div id="admPaneUsers" hidden>
+    <div class="toolbar" style="margin:0 0 10px;gap:8px">
+      <input id="adminUsersSearch" type="text" placeholder="Foydalanuvchi nomini qidiring..." maxlength="40" style="flex:1;min-width:160px">
+      <button type="button" class="btn secondary" id="adminUsersRefresh">🔄 Yangilash</button>
+    </div>
+    <small id="adminUsersStats" style="display:block;color:var(--muted);margin-bottom:8px"></small>
+    <div id="adminUsersList" class="history"></div>
+  </div>
+  <div id="admPaneExtra" hidden>
+    <form id="adminForm" class="toolbar" style="margin:0 0 12px" hidden>
+      <input id="adminNick" type="text" placeholder="Ro‘yxatdan o‘tgan nickname" maxlength="20">
+      <button class="btn primary" type="submit">Admin qo‘shish</button>
+    </form>
     <div id="adminList" class="history"></div>
   </div>
 </section>
@@ -1875,7 +1901,7 @@ function updatePoints() {
     const coins = getCoins();
     document.querySelectorAll('#navPoints, #tmPoints, #cabPoints, #ratingMyPoints, #rewardPoints')
         .forEach(el => { if (el) el.textContent = pts; });
-    document.querySelectorAll('#navCoins, #tmCoins, #walletCoins, #cabCoinsBal')
+    document.querySelectorAll('#navCoins, #tmCoins, #walletCoins, #cabCoinsBal, #addCoinBal')
         .forEach(el => { if (el) el.textContent = coins; });
     const lvl = getLevel(pts);
     const rl = document.getElementById('rewardLevel');
@@ -1957,8 +1983,12 @@ function showPage(page) {
       if (typeof window.renderDonatePage === 'function') window.renderDonatePage();
       if (typeof window.syncCoins === 'function') window.syncCoins(true);
     }
+    if (page === 'add' && typeof window.syncCoins === 'function') window.syncCoins(true);
     if (page === 'achievements' && window.renderAchievements) window.renderAchievements();
-    if (page === 'cabinet' && window.renderCabinet) window.renderCabinet();
+    if (page === 'cabinet') {
+      if (typeof window.syncCoins === 'function') window.syncCoins(true);
+      if (window.renderCabinet) window.renderCabinet();
+    }
     if (page === 'settings' && window.renderSettings) window.renderSettings();
     if (page === 'notifs' && window.renderNotifs) window.renderNotifs();
     if (page === 'chat' && typeof renderChat === 'function') renderChat();
@@ -2179,6 +2209,28 @@ document.getElementById('bookExchange').addEventListener('change', e => {
     document.getElementById('wantBookLabel').hidden = !e.target.checked;
 });
 
+const _premToggle = document.getElementById('bookPremiumToggle');
+if (_premToggle) {
+    _premToggle.addEventListener('change', () => {
+        const hint = document.getElementById('addPremiumHint');
+        if (_premToggle.checked && getCoins() < 5) {
+            _premToggle.checked = false;
+            showToast('Yetarli Coin yo‘q (kerak: 5). Avval Coin oling.');
+            if (hint) {
+                hint.style.color = '#fbbf24';
+                hint.textContent = '5 Coin kerak — «🪙 Coin olish» tugmasi orqali hisobingizni to‘ldiring.';
+            }
+            return;
+        }
+        if (hint) {
+            hint.style.color = _premToggle.checked ? 'var(--ok)' : 'var(--muted)';
+            hint.textContent = _premToggle.checked
+                ? '✅ Joylashda −5 Coin yechiladi va kitob 7 kun Premium bo‘ladi.'
+                : 'Ixtiyoriy. Tasdiqlangach 7 kun tepada turadi.';
+        }
+    });
+}
+
 // Kitob joylash formasi
 document.getElementById('addBookForm').addEventListener('submit', event => {
     event.preventDefault();
@@ -2186,6 +2238,13 @@ document.getElementById('addBookForm').addEventListener('submit', event => {
     if (!window.kitobCoinCurrentUser) {
         openAuth();
         showToast("Kitob joylash uchun avval akkauntingizga kiring.");
+        return;
+    }
+
+    const wantPremium = !!(_premToggle && _premToggle.checked);
+    if (wantPremium && getCoins() < 5) {
+        if (_premToggle) _premToggle.checked = false;
+        showToast('Yetarli Coin yo‘q (kerak: 5)');
         return;
     }
 
@@ -2229,10 +2288,24 @@ document.getElementById('addBookForm').addEventListener('submit', event => {
             approved: false,
             createdAt: Date.now()
         };
+        if (wantPremium) {
+            book.premiumUntil = Date.now() + 7 * 24 * 60 * 60 * 1000;
+        }
 
         if (cloudDb) {
             try {
                 await cloudDb.collection('books').doc(book.id).set(book);
+                if (wantPremium) {
+                    await cloudDb.collection('coinGrants').add({
+                        uid: window.kitobCoinCurrentUser.uid,
+                        nick: window.kitobCoinCurrentUser.displayName || '',
+                        coins: -5,
+                        type: 'spend',
+                        reason: 'Premium e’lon (joylashda): «' + book.title + '»',
+                        bookId: book.id,
+                        at: Date.now()
+                    });
+                }
                 const cached = Object.assign({}, book, { _docId: book.id });
                 _mineBooksMap.set(book.id, cached);
                 if (window.isAdmin && window.isAdmin()) _adminBooksMap.set(book.id, cached);
@@ -2255,6 +2328,16 @@ document.getElementById('addBookForm').addEventListener('submit', event => {
             }
         }
 
+        if (wantPremium) {
+            setCoins(getCoins() - 5);
+            try {
+                const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+                hist.unshift('Premium e’lon (joylashda): −5 🪙 («' + book.title + '»)');
+                localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(0, 100)));
+            } catch (e) {}
+            if (typeof window.syncCoins === 'function') window.syncCoins(true);
+        }
+
         msg.style.color = 'var(--ok)';
         msg.textContent = '✅ Joylandi! Hozir faqat adminlarga ko‘rinadi — tasdiqlangach katalogga chiqadi.';
         showToast('✅ Kitob admin tekshiruviga yuborildi.');
@@ -2275,6 +2358,11 @@ document.getElementById('addBookForm').addEventListener('submit', event => {
         event.target.reset();
         document.getElementById('imagePreview').hidden = true;
         document.getElementById('wantBookLabel').hidden = false;
+        const _premHintEl = document.getElementById('addPremiumHint');
+        if (_premHintEl) {
+            _premHintEl.style.color = 'var(--muted)';
+            _premHintEl.textContent = 'Ixtiyoriy. Tasdiqlangach 7 kun tepada turadi.';
+        }
 
         updateTotalBooks();
         renderBooks();
@@ -2565,18 +2653,181 @@ setTimeout(observeReveals, 100);
 
   const GRANTS_KEY = "kitobcoin_coin_grants_v5";
   let _admTab = "books";
+  let adminUsersCache = [], lastUsersLoad = 0;
+
+  function renderAdminUsers() {
+    const listEl = $("adminUsersList"), statsEl = $("adminUsersStats");
+    if (!listEl) return;
+    if (!window.isAdmin || !window.isAdmin()) {
+      listEl.replaceChildren();
+      if (statsEl) statsEl.textContent = "";
+      return;
+    }
+    const q = (($("adminUsersSearch") && $("adminUsersSearch").value) || "").trim().toLowerCase();
+    const filtered = q
+      ? adminUsersCache.filter(u => String(u.nickname || "").toLowerCase().includes(q) || String(u.uid || "").toLowerCase().includes(q))
+      : adminUsersCache;
+    if (statsEl) {
+      statsEl.textContent = q
+        ? ("Topildi: " + filtered.length + " / " + adminUsersCache.length + " ta foydalanuvchi")
+        : ("Jami: " + adminUsersCache.length + " ta foydalanuvchi");
+    }
+    if (typeof window.updateAdminTabCounts === "function") {
+      window.updateAdminTabCounts(null, null, null, null, adminUsersCache.length);
+    }
+    listEl.replaceChildren();
+    if (!adminUsersCache.length) {
+      const empty = document.createElement("div");
+      empty.className = "history-item";
+      empty.textContent = "Hozircha foydalanuvchilar ro‘yxati bo‘sh.";
+      listEl.append(empty);
+      return;
+    }
+    if (!filtered.length) {
+      const empty = document.createElement("div");
+      empty.className = "history-item";
+      empty.textContent = "Mos foydalanuvchi topilmadi.";
+      listEl.append(empty);
+      return;
+    }
+    const me = window.kitobCoinCurrentUser;
+    const admMap = new Set(getAdmins().map(a => a.uid));
+    filtered.forEach(u => {
+      const row = document.createElement("div");
+      row.className = "history-item admin-row";
+      const info = document.createElement("div");
+      info.style.cssText = "display:flex;flex-direction:column;gap:2px;min-width:0";
+      const titleLine = document.createElement("div");
+      titleLine.style.cssText = "display:flex;align-items:center;gap:6px;flex-wrap:wrap";
+      const nameB = document.createElement("b");
+      nameB.textContent = "@" + (u.nickname || "Foydalanuvchi");
+      titleLine.append(nameB);
+      const isMe = !!(me && u.uid === me.uid);
+      if (isMe && window.isOwner && window.isOwner()) {
+        const tag = document.createElement("small");
+        tag.style.color = "var(--accent2)";
+        tag.textContent = "👑 Sayt egasi";
+        titleLine.append(tag);
+      } else if (admMap.has(u.uid) || (isMe && window.isAdmin && window.isAdmin())) {
+        const tag = document.createElement("small");
+        tag.style.color = "var(--ok)";
+        tag.textContent = "🛡 Admin";
+        titleLine.append(tag);
+      }
+      const meta = document.createElement("small");
+      meta.style.color = "var(--muted)";
+      const parts = ["⭐ " + (Number(u.points) || 0) + " ball", "📚 " + (u.booksCount || 0) + " kitob"];
+      if (u.updatedAt) parts.push(new Date(u.updatedAt).toLocaleDateString());
+      meta.textContent = parts.join(" · ");
+      info.append(titleLine, meta);
+      row.append(info);
+
+      const acts = document.createElement("div");
+      acts.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0";
+      const realUid = u.uid && !String(u.uid).startsWith("nick:");
+      if (realUid && me && u.uid !== me.uid) {
+        if (typeof window.startChatWith === "function") {
+          const chatBtn = document.createElement("button");
+          chatBtn.type = "button"; chatBtn.className = "btn secondary";
+          chatBtn.textContent = "💬 Yozish";
+          chatBtn.addEventListener("click", () => window.startChatWith(u.uid, u.nickname));
+          acts.append(chatBtn);
+        }
+        if (typeof window.modAsk === "function" && typeof window.setRestriction === "function" && !admMap.has(u.uid)) {
+          const banBtn = document.createElement("button");
+          banBtn.type = "button"; banBtn.className = "btn secondary danger";
+          banBtn.textContent = "🚫 Ban";
+          banBtn.addEventListener("click", async () => {
+            const ans = await window.modAsk("🚫 @" + u.nickname + " — ban");
+            if (ans) await window.setRestriction(u.uid, u.nickname, { ban: ans.until }, ans.reason);
+          });
+          acts.append(banBtn);
+        }
+      }
+      if (acts.childNodes.length) row.append(acts);
+      listEl.append(row);
+    });
+  }
+
+  async function loadAdminUsers(force) {
+    if (!window.isAdmin || !window.isAdmin()) {
+      adminUsersCache = [];
+      renderAdminUsers();
+      return;
+    }
+    if (!force && adminUsersCache.length && Date.now() - lastUsersLoad < 15000) {
+      renderAdminUsers();
+      return;
+    }
+    lastUsersLoad = Date.now();
+    const listEl = $("adminUsersList");
+    if (listEl && !adminUsersCache.length) {
+      listEl.innerHTML = '<div class="history-item">⏳ Yuklanmoqda...</div>';
+    }
+    const map = new Map();
+    const upsert = (uid, nick, points, updatedAt) => {
+      const cleanNick = String(nick || "").trim();
+      const key = uid || ("nick:" + cleanNick.toLowerCase());
+      if (!key || key === "nick:") return;
+      const prev = map.get(key) || { uid: key, nickname: cleanNick || key, points: 0, updatedAt: 0, booksCount: 0 };
+      if (cleanNick && (!prev.nickname || prev.nickname === prev.uid || prev.nickname === "Foydalanuvchi")) prev.nickname = cleanNick;
+      if (typeof points === "number" && points > prev.points) prev.points = points;
+      if (typeof updatedAt === "number" && updatedAt > prev.updatedAt) prev.updatedAt = updatedAt;
+      map.set(key, prev);
+    };
+    if (hasCloud()) {
+      try {
+        const snap = await cloudDb.collection("users").get();
+        snap.forEach(doc => {
+          const d = doc.data() || {};
+          upsert(d.uid || doc.id, d.nickname || "Foydalanuvchi", Number(d.points) || 0, Number(d.updatedAt) || 0);
+        });
+      } catch (err) {
+        console.warn("admin users", err);
+      }
+    } else {
+      getUsers().forEach(u => upsert(u.uid, u.nickname, 0, u.updatedAt || 0));
+    }
+    if (typeof getBooks === "function") {
+      getBooks().forEach(b => {
+        if (!b || String(b.id || "").startsWith("sample")) return;
+        const uid = b.ownerUid || "";
+        const nick = b.ownerNick || "";
+        if (uid || nick) upsert(uid, nick || "Foydalanuvchi", 0, Number(b.createdAt) || 0);
+        const key = uid || ("nick:" + String(nick).trim().toLowerCase());
+        const item = map.get(key);
+        if (item) item.booksCount = (item.booksCount || 0) + 1;
+      });
+    }
+    adminUsersCache = Array.from(map.values()).sort((a, b) => {
+      const dt = (b.updatedAt || 0) - (a.updatedAt || 0);
+      if (dt) return dt;
+      return String(a.nickname || "").localeCompare(String(b.nickname || ""));
+    });
+    renderAdminUsers();
+  }
+  window.loadAdminUsers = loadAdminUsers;
+
+  const _usersSearch = $("adminUsersSearch");
+  if (_usersSearch) _usersSearch.addEventListener("input", renderAdminUsers);
+  const _usersRefresh = $("adminUsersRefresh");
+  if (_usersRefresh) _usersRefresh.addEventListener("click", () => loadAdminUsers(true));
+
   window.setAdminTab = function (tab) {
     _admTab = tab || "books";
     const panes = {
       books: $("admPaneBooks"),
       exchanges: $("admPaneEx"),
       reports: $("admPaneMod"),
+      coins: $("admPaneCoins"),
+      users: $("admPaneUsers"),
       extra: $("admPaneExtra")
     };
     Object.keys(panes).forEach(k => { if (panes[k]) panes[k].hidden = (k !== _admTab); });
     document.querySelectorAll("#admTabs [data-admtab]").forEach(btn => {
       btn.classList.toggle("on", btn.dataset.admtab === _admTab);
     });
+    if (_admTab === "users" && window.isAdmin && window.isAdmin()) loadAdminUsers();
   };
   const _admTabsEl = $("admTabs");
   if (_admTabsEl) {
@@ -2597,7 +2848,15 @@ setTimeout(observeReveals, 100);
     if (owner && Date.now() - lastAdminLoad > 10000) { lastAdminLoad = Date.now(); loadAdmins().then(renderAdminPanel); }
     $("cabRole").textContent = owner ? "👑 Sayt egasi" : admin ? "🛡 Admin" : "Foydalanuvchi";
     $("adminPanel").hidden = !admin;
-    if (!admin) return;
+    if (!admin) {
+      adminUsersCache = [];
+      const ul = $("adminUsersList");
+      if (ul) ul.replaceChildren();
+      return;
+    }
+    const coinTab = document.querySelector('#admTabs [data-admtab="coins"]');
+    if (coinTab) coinTab.hidden = !owner;
+    if (!owner && _admTab === "coins") _admTab = "books";
     window.setAdminTab(_admTab);
     if (typeof window.refreshBookSync === "function") window.refreshBookSync();
     if (window.renderAdminQueues) window.renderAdminQueues();
@@ -2610,6 +2869,7 @@ setTimeout(observeReveals, 100);
       : "1 bosish bilan tasdiqlang";
     if (window.renderPendingDonates) window.renderPendingDonates();
     if (owner && window.syncCoins) window.syncCoins();
+    loadAdminUsers();
     const list = $("adminList");
     list.replaceChildren();
     const admins = getAdmins();
@@ -3029,7 +3289,12 @@ setTimeout(observeReveals, 100);
       if (window.syncCoins) await window.syncCoins(true);
     } catch (err) {
       $("donateMessage").style.color = "var(--danger)";
-      $("donateMessage").textContent = "❌ Yuborilmadi: " + (err.code || err.message);
+      if (err && err.code === "permission-denied") {
+        $("donateMessage").textContent = "❌ Firebase’da firestore.rules hali yangilanmagan (Publish qilinmagan).";
+        if (window.isOwner && window.isOwner() && window.showRulesFixModal) window.showRulesFixModal(err);
+      } else {
+        $("donateMessage").textContent = "❌ Yuborilmadi: " + (err.code || err.message);
+      }
     } finally { btn.disabled = false; }
   });
 
@@ -3109,6 +3374,14 @@ setTimeout(observeReveals, 100);
     const cloudList = window.__pendingCoinRequests || [];
     const localList = JSON.parse(localStorage.getItem(PENDING_DONATE_KEY) || "[]").map(p => Object.assign({}, p, { _local: true }));
     const all = cloudList.concat(localList).sort((a, b) => (b.at || 0) - (a.at || 0));
+    if (typeof window.updateAdminTabCounts === "function") window.updateAdminTabCounts(null, null, null, all.length);
+    if (!all.length) {
+      const empty = document.createElement("div");
+      empty.className = "history-item";
+      empty.textContent = "✅ Hozircha yangi to‘lov so‘rovlari yo‘q.";
+      pendBox.append(empty);
+      return;
+    }
     all.forEach(p => {
       const row = document.createElement("div");
       row.className = "history-item admin-row";
@@ -3215,12 +3488,50 @@ setTimeout(observeReveals, 100);
       window.__cloudCoinBalance = Math.max(0, sum);
       try { localStorage.setItem(COIN_KEY + "_" + user.uid, String(window.__cloudCoinBalance)); } catch (e) {}
       if (typeof updatePoints === "function") updatePoints();
+
+      // Yangi ijobiy coin tushumlari haqida foydalanuvchiga bildirishnoma
+      try {
+        const seenKey = "kc_seen_coin_grant_" + user.uid;
+        const firstRun = localStorage.getItem(seenKey) === null;
+        let seen = JSON.parse(localStorage.getItem(seenKey) || "[]");
+        const seenSet = new Set(seen);
+        let addedAny = false;
+        ledger.forEach(g => {
+          if (g.id && !seenSet.has(g.id)) {
+            seenSet.add(g.id);
+            addedAny = true;
+            if (!firstRun && Number(g.coins) > 0 && typeof window.pushNotif === "function") {
+              window.pushNotif("🪙 +" + g.coins + " Coin tushdi (" + (g.reason || "To‘lov") + ")", "coin");
+              showToast("🪙 +" + g.coins + " Coin hisobingizga tushdi!");
+            }
+          }
+        });
+        if (firstRun || addedAny) localStorage.setItem(seenKey, JSON.stringify(Array.from(seenSet).slice(-100)));
+      } catch (e) {}
+
       if (window.isOwner && window.isOwner()) {
         try {
           const pSnap = await cloudDb.collection("coinRequests").where("status", "==", "pending").get();
           const pend = [];
           pSnap.forEach(d => pend.push(Object.assign({ id: d.id }, d.data() || {})));
+          pend.sort((a, b) => (b.at || 0) - (a.at || 0));
           window.__pendingCoinRequests = pend;
+          try {
+            const seenReqKey = "kc_seen_coin_reqs_" + user.uid;
+            let seenReqs = JSON.parse(localStorage.getItem(seenReqKey) || "[]");
+            const seenReqSet = new Set(seenReqs);
+            let reqChanged = false;
+            pend.forEach(r => {
+              if (r.id && !seenReqSet.has(r.id)) {
+                seenReqSet.add(r.id);
+                reqChanged = true;
+                if (typeof window.pushNotif === "function") {
+                  window.pushNotif("💳 Coin to‘lovi: " + (r.nick || "Foydalanuvchi") + " — " + r.amount + " so‘m (" + r.coins + " Coin)", "coin");
+                }
+              }
+            });
+            if (reqChanged) localStorage.setItem(seenReqKey, JSON.stringify(Array.from(seenReqSet).slice(-100)));
+          } catch (e) {}
           if (window.renderPendingDonates) window.renderPendingDonates();
         } catch (e) {}
       }
@@ -4041,17 +4352,22 @@ service cloud.firestore {
     }
   };
 
-  window.updateAdminTabCounts = function (booksCount, exCount, repCount) {
+  window.updateAdminTabCounts = function (booksCount, exCount, repCount, coinsCount, usersCount) {
     const tabBooks = document.querySelector('#admTabs [data-admtab="books"]');
     const tabEx = document.querySelector('#admTabs [data-admtab="exchanges"]');
     const tabRep = document.querySelector('#admTabs [data-admtab="reports"]');
+    const tabCoins = document.querySelector('#admTabs [data-admtab="coins"]');
+    const tabUsers = document.querySelector('#admTabs [data-admtab="users"]');
     if (tabBooks && typeof booksCount === "number") tabBooks.textContent = "📚 Kitoblar" + (booksCount ? " (" + booksCount + ")" : "");
     if (tabEx && typeof exCount === "number") tabEx.textContent = "🔄 Almashuvlar" + (exCount ? " (" + exCount + ")" : "");
     if (tabRep && typeof repCount === "number") tabRep.textContent = "⚠️ Shikoyatlar" + (repCount ? " (" + repCount + ")" : "");
+    if (tabCoins && typeof coinsCount === "number") tabCoins.textContent = "🪙 Coinlar" + (coinsCount ? " (" + coinsCount + ")" : "");
+    if (tabUsers && typeof usersCount === "number") tabUsers.textContent = "👥 Foydalanuvchilar" + (usersCount ? " (" + usersCount + ")" : "");
     const navCab = document.getElementById("navCabinet");
     if (navCab && isAdm()) {
-      const b = Number(navCab.dataset.bc || 0), ex = Number(navCab.dataset.ec || 0), rp = Number(navCab.dataset.rc || 0);
-      const tot = b + ex + rp;
+      if (typeof coinsCount === "number") navCab.dataset.cc = String(coinsCount);
+      const b = Number(navCab.dataset.bc || 0), ex = Number(navCab.dataset.ec || 0), rp = Number(navCab.dataset.rc || 0), cc = Number(navCab.dataset.cc || 0);
+      const tot = b + ex + rp + cc;
       navCab.textContent = "👤 Kabinet" + (tot > 0 ? " (" + tot + ")" : "");
     }
   };
@@ -5002,8 +5318,14 @@ service cloud.firestore {
       if (typeof window.syncCoins === "function") await window.syncCoins(true);
       if (typeof window.renderDonatePage === "function") window.renderDonatePage();
     } catch (err) {
-      if (msg) { msg.style.color = "#ff9b9b"; msg.textContent = "❌ Xato: " + (err.code || err.message); }
-      showToast("❌ " + (err.code || err.message));
+      if (err && err.code === "permission-denied") {
+        if (msg) { msg.style.color = "#ff9b9b"; msg.textContent = "❌ Firebase’da firestore.rules hali yangilanmagan (Publish qilinmagan)."; }
+        showToast("❌ Firebase qoidalarini Publish qiling");
+        if (window.isOwner && window.isOwner() && window.showRulesFixModal) window.showRulesFixModal(err);
+      } else {
+        if (msg) { msg.style.color = "#ff9b9b"; msg.textContent = "❌ Xato: " + (err.code || err.message); }
+        showToast("❌ " + (err.code || err.message));
+      }
     } finally {
       if (btn) btn.disabled = false;
     }
@@ -5299,6 +5621,9 @@ window.renderNotifs = function () {
       }
       if (subject && subject.indexOf("YANGI AKKAUNT") === 0) {
         pushNotif("Yangi a’zo: " + subject.replace(/^YANGI AKKAUNT — /, ""), "user");
+      }
+      if (subject && subject.indexOf("TO‘LOV") === 0) {
+        pushNotif("💳 Coin to‘lov so‘rovi: " + subject.replace(/^TO‘LOV — /, ""), "coin");
       }
     } catch (e) {}
     return p;
@@ -6303,6 +6628,18 @@ window.renderNotifs = function () {
     ["Coin tarixi uchun akkauntga kiring.","Войдите в аккаунт для истории монет.","Sign in to view Coin history."],
     ["Tasdiqlash","Подтвердить","Approve"],["Rad etish","Отклонить","Reject"],
     ["Coin berish","Выдать монеты","Grant Coins"],["Premium (5 🪙)","Premium (5 🪙)","Premium (5 🪙)"],
+    ["KitobCoin — Premium e’lon","KitobCoin — Premium-объявление","KitobCoin — Premium listing"],
+    ["Joylash bilan Premium qilish (5 Coin / 7 kun — katalog yuqorisida)","Сделать Premium при добавлении (5 монет / 7 дней — в топе каталога)","Promote as Premium on post (5 Coins / 7 days — top of catalog)"],
+    ["Ixtiyoriy. Tasdiqlangach 7 kun tepada turadi.","Необязательно. После подтверждения пробудет в топе 7 дней.","Optional. Stays at the top for 7 days once approved."],
+    ["Coin olish","Получить монеты","Get Coins"],
+    ["Hozircha yangi to‘lov so‘rovlari yo‘q.","Пока нет новых заявок на оплату.","No pending payment requests yet."],
+    ["Balans:","Баланс:","Balance:"],
+    ["Foydalanuvchilar","Пользователи","Users"],
+    ["Foydalanuvchi nomini qidiring...","Поиск по имени пользователя...","Search username..."],
+    ["Yangilash","Обновить","Refresh"],
+    ["Hozircha foydalanuvchilar ro‘yxati bo‘sh.","Список пользователей пока пуст.","User list is empty."],
+    ["Mos foydalanuvchi topilmadi.","Подходящих пользователей не найдено.","No matching users found."],
+    ["Ban","Бан","Ban"],
     ["QOIDALAR","ПРАВИЛА","RULES"],["Qoidalar va ishonch","Правила и доверие","Rules and trust"],
     ["Admin tekshiruvi va moderatsiya","Проверка админа и модерация","Admin review & moderation"],
     ["Xavfsizlik","Безопасность","Safety"],["Ball va Coin","Баллы и монеты","Points and Coins"],
@@ -6406,6 +6743,9 @@ window.renderNotifs = function () {
     [/^(\d+) yosh$/, function (m) { return m[1] + ' ' + ruPl(+m[1], 'год', 'года', 'лет'); }, function (m) { return m[1] + ' y/o'; }],
     [/^(\d+) yulduz$/, function (m) { return m[1] + ' ' + ruPl(+m[1], 'звезда', 'звезды', 'звёзд'); }, function (m) { return m[1] + (m[1] === '1' ? ' star' : ' stars'); }],
     [/^kitoblar: (\d+)$/, function (m) { return 'книг: ' + m[1]; }, function (m) { return 'books: ' + m[1]; }],
+    [/^(\d+) kitob$/, function (m) { return m[1] + ' книг'; }, function (m) { return m[1] + (m[1] === '1' ? ' book' : ' books'); }],
+    [/^Jami: (\d+) ta foydalanuvchi$/, function (m) { return 'Всего пользователей: ' + m[1]; }, function (m) { return 'Total users: ' + m[1]; }],
+    [/^Topildi: (\d+) \/ (\d+) ta foydalanuvchi$/, function (m) { return 'Найдено: ' + m[1] + ' из ' + m[2]; }, function (m) { return 'Found: ' + m[1] + ' / ' + m[2] + ' users'; }],
     [/^(?:(Bronza|Kumush|Oltin|Platina|Olmos) · )?(.*) kuni olingan$/, function (m, t) { return (m[1] ? t(m[1]) + ' · ' : '') + m[2] + ' получено'; }, function (m, t) { return (m[1] ? t(m[1]) + ' · ' : '') + 'earned ' + m[2]; }],
     [/^Oyiga (\d+) ta · yangi oy (.*)$/, function (m) { return m[1] + ' в месяц · новый месяц ' + m[2]; }, function (m) { return m[1] + ' per month · new month ' + m[2]; }],
     [/^(\d+) ta tasdiqlangan kitob$/, function (m) { return m[1] + ' подтверждённых книг'; }, function (m) { return m[1] + ' approved books'; }],
