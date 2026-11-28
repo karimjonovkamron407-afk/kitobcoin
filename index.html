@@ -2691,6 +2691,7 @@ setTimeout(observeReveals, 100);
       return;
     }
     const me = window.kitobCoinCurrentUser;
+    const owner = !!(window.isOwner && window.isOwner());
     const admMap = new Set(getAdmins().map(a => a.uid));
     filtered.forEach(u => {
       const row = document.createElement("div");
@@ -2703,7 +2704,7 @@ setTimeout(observeReveals, 100);
       nameB.textContent = "@" + (u.nickname || "Foydalanuvchi");
       titleLine.append(nameB);
       const isMe = !!(me && u.uid === me.uid);
-      if (isMe && window.isOwner && window.isOwner()) {
+      if (isMe && owner) {
         const tag = document.createElement("small");
         tag.style.color = "var(--accent2)";
         tag.textContent = "👑 Sayt egasi";
@@ -2716,7 +2717,9 @@ setTimeout(observeReveals, 100);
       }
       const meta = document.createElement("small");
       meta.style.color = "var(--muted)";
-      const parts = ["⭐ " + (Number(u.points) || 0) + " ball", "📚 " + (u.booksCount || 0) + " kitob"];
+      const parts = ["⭐ " + (Number(u.points) || 0) + " ball"];
+      if (owner && typeof u.coins === "number") parts.push("🪙 " + u.coins + " coin");
+      parts.push("📚 " + (u.booksCount || 0) + " kitob");
       if (u.updatedAt) parts.push(new Date(u.updatedAt).toLocaleDateString());
       meta.textContent = parts.join(" · ");
       info.append(titleLine, meta);
@@ -2725,6 +2728,14 @@ setTimeout(observeReveals, 100);
       const acts = document.createElement("div");
       acts.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0";
       const realUid = u.uid && !String(u.uid).startsWith("nick:");
+      if (realUid && owner) {
+        const editBtn = document.createElement("button");
+        editBtn.type = "button"; editBtn.className = "btn primary";
+        editBtn.style.cssText = "padding:6px 10px;font-size:12px";
+        editBtn.textContent = "✏️ Ball / Coin";
+        editBtn.addEventListener("click", () => openOwnerBalanceModal(u));
+        acts.append(editBtn);
+      }
       if (realUid && me && u.uid !== me.uid) {
         if (typeof window.startChatWith === "function") {
           const chatBtn = document.createElement("button");
@@ -2747,6 +2758,142 @@ setTimeout(observeReveals, 100);
       if (acts.childNodes.length) row.append(acts);
       listEl.append(row);
     });
+  }
+
+  function openOwnerBalanceModal(u) {
+    if (!window.isOwner || !window.isOwner() || !u || !u.uid) return;
+    const me = window.kitobCoinCurrentUser;
+    if (!me) return;
+    const ov = document.createElement("div");
+    ov.className = "auth-overlay";
+    const box = document.createElement("section");
+    box.className = "auth-box";
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button"; closeBtn.className = "auth-close"; closeBtn.textContent = "×";
+    closeBtn.onclick = () => ov.remove();
+
+    const h2 = document.createElement("h2");
+    h2.textContent = "✏️ @" + (u.nickname || "Foydalanuvchi") + " — Ball / Coin";
+    const sub = document.createElement("p");
+    sub.style.cssText = "color:var(--muted);font-size:13px;margin:4px 0 12px";
+    sub.textContent = "Yangi qiymatni kiriting (faqat sayt egasi o‘zgartira oladi).";
+
+    const lblPts = document.createElement("label");
+    lblPts.style.cssText = "display:block;font-size:13px;font-weight:600;margin-bottom:4px";
+    lblPts.textContent = "⭐ Ballar soni";
+    const inpPts = document.createElement("input");
+    inpPts.type = "number"; inpPts.min = "0"; inpPts.max = "1000000"; inpPts.step = "1";
+    let basePoints = Math.max(0, Math.floor(Number(u.points) || 0));
+    inpPts.value = String(basePoints);
+    inpPts.style.cssText = "width:100%;margin:0 0 12px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#0a1020;color:var(--text);font:inherit";
+
+    const lblCoins = document.createElement("label");
+    lblCoins.style.cssText = "display:block;font-size:13px;font-weight:600;margin-bottom:4px";
+    lblCoins.textContent = "🪙 Coinlar soni";
+    const inpCoins = document.createElement("input");
+    inpCoins.type = "number"; inpCoins.min = "0"; inpCoins.max = "1000000"; inpCoins.step = "1";
+    let baseCoins = typeof u.coins === "number" ? Math.max(0, Math.floor(u.coins)) : 0;
+    inpCoins.value = String(baseCoins);
+    inpCoins.style.cssText = inpPts.style.cssText;
+
+    const statusLine = document.createElement("small");
+    statusLine.style.cssText = "display:block;color:var(--muted);margin:-4px 0 10px";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button"; saveBtn.className = "btn primary full"; saveBtn.textContent = "💾 Saqlash";
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button"; cancelBtn.className = "btn secondary full"; cancelBtn.textContent = "Bekor qilish";
+    cancelBtn.style.marginTop = "8px";
+    cancelBtn.onclick = () => ov.remove();
+
+    box.append(closeBtn, h2, sub, lblPts, inpPts, lblCoins, inpCoins, statusLine, saveBtn, cancelBtn);
+    ov.append(box);
+    document.body.append(ov);
+
+    if (hasCloud()) {
+      saveBtn.disabled = true;
+      statusLine.textContent = "⏳ Joriy balans yuklanmoqda...";
+      Promise.all([
+        cloudDb.collection("users").doc(u.uid).get(),
+        cloudDb.collection("coinGrants").where("uid", "==", u.uid).get()
+      ]).then(([uDoc, gSnap]) => {
+        if (uDoc.exists) {
+          basePoints = Math.max(0, Math.floor(Number((uDoc.data() || {}).points) || 0));
+          inpPts.value = String(basePoints);
+        }
+        let sum = 0;
+        gSnap.forEach(d => { sum += Number((d.data() || {}).coins) || 0; });
+        baseCoins = Math.max(0, Math.floor(sum));
+        inpCoins.value = String(baseCoins);
+        u.points = basePoints;
+        u.coins = baseCoins;
+        statusLine.textContent = "Joriy: ⭐ " + basePoints + " ball · 🪙 " + baseCoins + " coin";
+        saveBtn.disabled = false;
+      }).catch(err => {
+        statusLine.textContent = "⚠️ Yuklashda xato: " + (err.code || err.message);
+        saveBtn.disabled = false;
+      });
+    }
+
+    saveBtn.onclick = async () => {
+      if (!window.isOwner || !window.isOwner()) { ov.remove(); return; }
+      const newPoints = Math.max(0, Math.floor(Number(inpPts.value)));
+      const newCoins = Math.max(0, Math.floor(Number(inpCoins.value)));
+      if (!Number.isFinite(newPoints) || !Number.isFinite(newCoins)) {
+        showToast("To‘g‘ri son kiriting.");
+        return;
+      }
+      if (!hasCloud()) {
+        showToast("Server ulanmagan.");
+        return;
+      }
+      saveBtn.disabled = true;
+      saveBtn.textContent = "⏳ Saqlanmoqda...";
+      const run = window.kcWithTokenRetry || ((fn) => fn());
+      const now = Date.now();
+      try {
+        if (newPoints !== basePoints) {
+          await run(() => cloudDb.collection("users").doc(u.uid).set({
+            uid: u.uid,
+            nickname: u.nickname || "Foydalanuvchi",
+            nicknameLower: String(u.nickname || "Foydalanuvchi").toLowerCase(),
+            points: newPoints,
+            pointsSetAt: now,
+            pointsSetBy: me.uid,
+            updatedAt: now
+          }, { merge: true }));
+          u.points = newPoints;
+          u.updatedAt = now;
+          if (u.uid === me.uid) {
+            try { localStorage.setItem("kc_pts_override_" + me.uid, String(now)); } catch (e) {}
+            if (typeof setPoints === "function") setPoints(newPoints);
+          }
+        }
+        if (newCoins !== baseCoins) {
+          const delta = newCoins - baseCoins;
+          await run(() => cloudDb.collection("coinGrants").add({
+            uid: u.uid,
+            nick: u.nickname || "",
+            coins: delta,
+            type: delta > 0 ? "grant" : "adjust",
+            reason: "Sayt egasi tahrirladi (" + baseCoins + " → " + newCoins + ")",
+            at: now,
+            grantedBy: me.uid
+          }));
+          u.coins = newCoins;
+          if (u.uid === me.uid && window.syncCoins) await window.syncCoins(true);
+        }
+        ov.remove();
+        renderAdminUsers();
+        if (typeof window.renderLeaderboard === "function") window.renderLeaderboard();
+        showToast("✅ @" + (u.nickname || "Foydalanuvchi") + " yangilandi: ⭐ " + newPoints + " ball · 🪙 " + newCoins + " coin");
+      } catch (err) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "💾 Saqlash";
+        if (err && err.code === "permission-denied" && window.showRulesFixModal) window.showRulesFixModal(err);
+        else showToast("❌ Saqlanmadi: " + (err.code || err.message));
+      }
+    };
   }
 
   async function loadAdminUsers(force) {
@@ -2784,6 +2931,21 @@ setTimeout(observeReveals, 100);
         });
       } catch (err) {
         console.warn("admin users", err);
+      }
+      if (window.isOwner && window.isOwner()) {
+        try {
+          const gSnap = await cloudDb.collection("coinGrants").get();
+          const coinSums = {};
+          gSnap.forEach(doc => {
+            const d = doc.data() || {};
+            if (d.uid) coinSums[d.uid] = (coinSums[d.uid] || 0) + (Number(d.coins) || 0);
+          });
+          map.forEach((val, key) => {
+            if (!String(key).startsWith("nick:")) val.coins = Math.max(0, Math.floor(coinSums[key] || 0));
+          });
+        } catch (err) {
+          console.warn("admin user coins", err);
+        }
       }
     } else {
       getUsers().forEach(u => upsert(u.uid, u.nickname, 0, u.updatedAt || 0));
@@ -3775,7 +3937,7 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if signedIn();
-      allow write: if signedIn() && request.auth.uid == uid;
+      allow write: if isOwner() || (signedIn() && request.auth.uid == uid);
     }
 
     // Kitoblar:
@@ -6640,6 +6802,9 @@ window.renderNotifs = function () {
     ["Hozircha foydalanuvchilar ro‘yxati bo‘sh.","Список пользователей пока пуст.","User list is empty."],
     ["Mos foydalanuvchi topilmadi.","Подходящих пользователей не найдено.","No matching users found."],
     ["Ban","Бан","Ban"],
+    ["Ball / Coin","Баллы / Монеты","Points / Coins"],
+    ["Ballar soni","Количество баллов","Points amount"],
+    ["Coinlar soni","Количество монет","Coins amount"],
     ["QOIDALAR","ПРАВИЛА","RULES"],["Qoidalar va ishonch","Правила и доверие","Rules and trust"],
     ["Admin tekshiruvi va moderatsiya","Проверка админа и модерация","Admin review & moderation"],
     ["Xavfsizlik","Безопасность","Safety"],["Ball va Coin","Баллы и монеты","Points and Coins"],
@@ -6878,29 +7043,59 @@ window.renderNotifs = function () {
     }).catch(function () {});
   };
 
-  // Ballarni bulutga yozish (reyting uchun) va boshqa qurilmada tiklash
-  var origSync = window.syncLeaderboard, state = {}, lastPts = -1;
-  function pushPoints() {
+  // Ballarni bulutga yozish (reyting uchun) va boshqa qurilmada / sayt egasi tahriridan tiklash
+  var origSync = window.syncLeaderboard, state = {}, lastPts = -1, ptsUnsub = null, watchedPtsUid = null;
+  function watchMyPoints() {
     var u = window.kitobCoinCurrentUser, db = (typeof cloudDb !== 'undefined') ? cloudDb : null;
-    if (!u || !db) return;
-    if (!state[u.uid]) {
-      state[u.uid] = 'pending';
-      db.collection('users').doc(u.uid).get().then(function (s) {
-        var cp = s.exists ? (Number(s.data().points) || 0) : 0;
-        state[u.uid] = 'done';
-        if (cp > getPoints()) { try { localStorage.setItem(POINTS_KEY, String(cp)); updatePoints(); } catch (e) {} }
-        pushPoints();
-      }).catch(function () { state[u.uid] = 'done'; });
-      return;
-    }
-    if (state[u.uid] !== 'done') return;
+    var uid = u ? u.uid : null;
+    if (uid === watchedPtsUid) return;
+    if (ptsUnsub) { try { ptsUnsub(); } catch (e) {} ptsUnsub = null; }
+    watchedPtsUid = uid;
+    lastPts = -1;
+    if (!uid || !db) return;
+    state[uid] = 'pending';
+    var firstSnap = true;
+    ptsUnsub = db.collection('users').doc(uid).onSnapshot(function (s) {
+      var d = s.exists ? (s.data() || {}) : {};
+      var cp = s.exists ? Math.max(0, Math.floor(Number(d.points) || 0)) : 0;
+      var setAt = Number(d.pointsSetAt) || 0;
+      var overrideKey = 'kc_pts_override_' + uid;
+      var seenSetAt = 0;
+      try { seenSetAt = Number(localStorage.getItem(overrideKey) || 0); } catch (e) {}
+      state[uid] = 'done';
+      if (setAt > seenSetAt) {
+        try {
+          localStorage.setItem(overrideKey, String(setAt));
+          localStorage.setItem(POINTS_KEY, String(cp));
+        } catch (e) {}
+        lastPts = cp;
+        if (typeof updatePoints === 'function') updatePoints();
+        if (typeof window.renderLeaderboard === 'function') window.renderLeaderboard();
+        if (typeof window.renderCabinet === 'function' && $('cabinet') && $('cabinet').classList.contains('active')) window.renderCabinet();
+        if (!firstSnap && d.pointsSetBy !== uid) {
+          if (typeof window.pushNotif === 'function') window.pushNotif('⭐ Sayt egasi ballaringizni yangiladi: ' + cp + ' ball', 'info');
+          if (typeof showToast === 'function') showToast('⭐ Ballaringiz yangilandi: ' + cp);
+        }
+      } else if (firstSnap && cp > getPoints()) {
+        try { localStorage.setItem(POINTS_KEY, String(cp)); } catch (e) {}
+        lastPts = cp;
+        if (typeof updatePoints === 'function') updatePoints();
+      }
+      firstSnap = false;
+      pushPoints();
+    }, function () { state[uid] = 'done'; });
+  }
+  function pushPoints() {
+    watchMyPoints();
+    var u = window.kitobCoinCurrentUser, db = (typeof cloudDb !== 'undefined') ? cloudDb : null;
+    if (!u || !db || state[u.uid] !== 'done') return;
     var p = getPoints(); if (p === lastPts) return; lastPts = p;
     var nick = u.displayName || 'Foydalanuvchi';
     db.collection('users').doc(u.uid).set({ uid: u.uid, nickname: nick, nicknameLower: String(nick).toLowerCase(), points: p, updatedAt: Date.now() }, { merge: true }).catch(function () {});
   }
   window.syncLeaderboard = function () { if (origSync) origSync.apply(this, arguments); pushPoints(); };
   setInterval(pushPoints, 30000);
-  setTimeout(pushPoints, 2500);
+  setTimeout(pushPoints, 1800);
 })();
 </script>
 
